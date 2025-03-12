@@ -93,16 +93,20 @@ Petition Tracker is an intelligent system designed to streamline the handling of
 `
 1. Navigate to the project directory:
    ```sh
-   cd frontend or Backend // which you want to run
+   cd frontend or Backend 
    ```
+   // which folder you want to run
 2. Install dependencies:
    ```sh
-   npm install // this will install dependencies
+   npm install 
    ```
+   // this will install dependencies
 3. Start the development server:
    ```sh
-   npm run dev //this will run the local server
+   npm run dev 
    ```
+  //this will run the local server
+
 
 ## Contribution Guidelines
 We welcome contributions from the community. Please follow the contribution guidelines in `CONTRIBUTING.md`.
