@@ -11,13 +11,18 @@ export const Login = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { loading, error, user, token } = useSelector((state: RootState) => state.auth);
 
-  
-
-
   useEffect(() => {
+    // Redirect based on user role
     if (user && token) {
-      const from = location.state?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true });
+      if (user.role === 'admin') {
+        navigate('/admin/dashboard', { replace: true });
+
+      }else if(user.role === 'department_officer') {
+        navigate('/officer/dashboard', { replace: true });
+      }else {
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
+      }
     }
   }, [user, token, navigate, location]);
 
@@ -27,7 +32,7 @@ export const Login = () => {
     };
   }, [dispatch]);
 
-  const handleLogin = (data: { mobile: string; password: string }) => {
+  const handleLogin = async (data: { email: string; password: string }) => {
     dispatch(login(data));
   };
 
@@ -48,7 +53,7 @@ export const Login = () => {
             <span className="block sm:inline">{error}</span>
           </div>
         )}
-        <AuthForm isLogin onSubmit={handleLogin} disabled={loading} />
+        <AuthForm isLogin={true} onSubmit={handleLogin} disabled={loading} />
         <div className="text-center">
           <p className="text-sm text-gray-600">
             Don't have an account?{' '}

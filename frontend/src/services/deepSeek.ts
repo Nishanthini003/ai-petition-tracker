@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const API_KEY = "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";
+const API_KEY = "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";
 
 export const getFromDeepseek = async (text: string) => {
   try {

@@ -4,7 +4,7 @@ import { auth } from '../../services/api';
 interface User {
   _id: string;
   name?: string;
-  mobile: string;
+  email: string;
   role: string;
   department?: string;
 }
@@ -27,16 +27,20 @@ const initialState: AuthState = {
 
 export const login = createAsyncThunk(
   'auth/login',
-  async ({ mobile, password }: { mobile: string; password: string }) => {
-    const response = await auth.login(mobile, password);
-    return response;
+  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+    try {
+      const response = await auth.login(email, password);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response.data);
+    }
   }
 );
 
 export const signup = createAsyncThunk(
   'auth/signup',
-  async ({ mobile, password }: { mobile: string; password: string }) => {
-    const response = await auth.signup(mobile, password);
+  async ({ email, password }: { email: string; password: string }) => {
+    const response = await auth.signup(email, password);
     return response;
   }
 );
@@ -54,6 +58,7 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     },
     setCredentials: (state, action) => {
       const { user, token } = action.payload;
@@ -61,6 +66,7 @@ const authSlice = createSlice({
       state.token = token;
       state.isAuthenticated = true;
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
     },
     clearError: (state) => {
       state.error = null;
@@ -79,10 +85,11 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         localStorage.setItem('token', action.payload.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.data.user));
       })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message || 'Login failed';
+        state.error = action.payload.error;
       })
       // Signup
       .addCase(signup.pending, (state) => {
@@ -95,6 +102,7 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         localStorage.setItem('token', action.payload.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.data.user));
       })
       .addCase(signup.rejected, (state, action) => {
         state.loading = false;

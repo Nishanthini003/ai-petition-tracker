@@ -9,7 +9,8 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OfficerLogin } from './pages/officer/OfficerLogin';
 import OfficerRegister from './pages/officer/OfficerRegister';
-import  {OfficerDashboard}  from './pages/officer/OfficerDashboard';
+import OfficerDashboard from './pages/officer/OfficerDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import type { RootState } from './store';
 
 // Configure future flags
@@ -44,11 +45,11 @@ const App = () => {
         {/* Public routes */}
         <Route
           path="/login"
-          element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />}
+          element={isAuthenticated ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : user.role === 'department_officer' ? '/officer/dashboard' : '/dashboard'} /> : <Login />}
         />
         <Route
           path="/signup"
-          element={isAuthenticated ? <Navigate to="/dashboard" /> : <Signup />}
+          element={isAuthenticated ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : user.role === 'department_officer' ? '/officer/dashboard' : '/dashboard'} /> : <Signup />}
         />
         <Route path="/officer/login" element={<OfficerLogin />} />
         <Route path="/officer/register" element={<OfficerRegister />} />
@@ -81,6 +82,16 @@ const App = () => {
           />
         </Route>
 
+        {/* Admin routes */}
+        <Route
+          path="/admin/dashboard"
+          element={
+            <PrivateRoute allowedRoles={['admin']}>
+              <AdminDashboard />
+            </PrivateRoute>
+          }
+        />
+
         {/* Officer routes */}
         <Route
           path="/officer/dashboard"
@@ -96,7 +107,7 @@ const App = () => {
           path="/"
           element={
             isAuthenticated ? (
-              <Navigate to="/dashboard" />
+              <Navigate to={user.role === 'admin' ? '/admin/dashboard' : user.role === 'department_officer' ? '/officer/dashboard' : '/dashboard'} />
             ) : (
               <Navigate to="/login" />
             )

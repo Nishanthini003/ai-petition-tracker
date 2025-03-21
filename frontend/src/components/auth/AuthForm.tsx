@@ -2,36 +2,37 @@ import { useState } from 'react';
 
 interface AuthFormProps {
   isLogin?: boolean;
-  onSubmit: (data: { mobile: string; password: string }) => void;
+  onSubmit: (data: { email: string; password: string }) => void;
   disabled?: boolean;
 }
 
 export const AuthForm = ({ isLogin = true, onSubmit, disabled = false }: AuthFormProps) => {
   const [formData, setFormData] = useState({
-    mobile: '',
+    email: '',
     password: '',
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log(formData);
+    
     onSubmit(formData);
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
       <div>
-        <label htmlFor="mobile" className="block text-sm font-medium text-gray-700">
-          Mobile Number
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+          Email
         </label>
         <input
-          type="tel"
-          id="mobile"
-          pattern="[0-9]{10}"
+          type="email"
+          id="email"
           required
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          placeholder="Enter 10-digit mobile number"
-          value={formData.mobile}
-          onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+          placeholder="Enter your email"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
           disabled={disabled}
         />
       </div>

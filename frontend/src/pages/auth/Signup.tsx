@@ -24,7 +24,7 @@ export const Signup = () => {
     };
   }, [dispatch]);
 
-  const handleSignup = async (data: { mobile: string; password: string }) => {
+  const handleSignup = async (data: { email: string; password: string }) => {
     dispatch(signup(data));
   };
 

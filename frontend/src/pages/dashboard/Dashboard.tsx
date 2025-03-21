@@ -24,6 +24,8 @@ interface Petition {
 
 export const Dashboard = () => {
   const { user } = useSelector((state: RootState) => state.auth);
+  console.log(user);
+  
   const [stats, setStats] = useState<StatCard[]>([]);
   const [recentPetitions, setRecentPetitions] = useState<Petition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +124,7 @@ export const Dashboard = () => {
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-semibold text-gray-800">
-              Welcome back, {user?.mobile || 'User'}!
+              Welcome back, {user?.email || 'User'}!
             </h2>
             <p className="mt-1 text-gray-600">
               Here's what's happening with your petitions today.

@@ -48,10 +48,10 @@ api.interceptors.response.use(
 );
 
 export const auth = {
-  login: async (mobile: string, password: string) => {
+  login: async (email: string, password: string) => {
     try {
-      console.log('Attempting login for:', mobile);
-      const response = await api.post('/auth/login', { mobile, password });
+      console.log('Attempting login for:', email);
+      const response = await api.post('/auth/login', { email, password });
       console.log('Login successful:', response.data);
       return response.data;
     } catch (error) {
@@ -59,9 +59,9 @@ export const auth = {
       throw error;
     }
   },
-  signup: async (mobile: string, password: string) => {
+  signup: async (email: string, password: string) => {
     try {
-      const response = await api.post('/auth/signup', { mobile, password });
+      const response = await api.post('/auth/signup', { email, password });
       return response.data;
     } catch (error) {
       console.error('Signup failed:', error);
@@ -70,7 +70,7 @@ export const auth = {
   },
   officerSignup: async (data: {
     name: string;
-    mobile: string;
+    email: string;
     password: string;
     department: string;
     role: string;
