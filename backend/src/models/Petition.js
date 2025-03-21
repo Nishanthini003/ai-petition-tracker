@@ -13,8 +13,7 @@ const petitionSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    lowercase: true,
-    trim: true
+    enum: ['Environment', 'Justice', 'Health', 'Education', 'Housing', 'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance', 'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 'Consumer Affairs'],
   },
   creator: {
     type: mongoose.Schema.Types.ObjectId,

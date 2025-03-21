@@ -10,7 +10,8 @@ import helmet from 'helmet';
 import authRoutes from './routes/authRoutes.js';
 import petitionRoutes from './routes/petitionRoutes.js';
 import dashboardRoutes from './routes/dashboard.js';
-import ocrRoutes from './routes/ocrRoutes.js'
+import ocrRoutes from './routes/ocrRoutes.js';
+import departmentRoutes from './routes/departmentRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -41,6 +42,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/petitions', petitionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/ocr', ocrRoutes);
+app.use('/api/department', departmentRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)

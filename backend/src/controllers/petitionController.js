@@ -2,6 +2,7 @@ import Petition from '../models/Petition.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import User from '../models/User.js';
 
 // Configure multer for image upload
 const storage = multer.diskStorage({
@@ -232,44 +233,31 @@ export const updatePetition = async (req, res) => {
   }
 };
 
-// Add comment to petition
-export const addComment = async (req, res) => {
+
+export const getDepartmentPetitions = async (req, res) => {
   try {
-    const petition = await Petition.findById(req.params.id);
-
-    if (!petition) {
-      return res.status(404).json({
-        error: 'Petition not found'
-      });
+    const userId = req.user?.id;
+    const officer = await User.findById(userId);
+    console.log(officer);
+    if (!officer || officer.role !== 'department_officer') {
+      return res.status(403).json({ message: 'Access denied or invalid user' });
     }
+    const petitions = await Petition.find({ category: officer.department });
 
-    // Check comment permissions
-    const isCreator = petition.creator.toString() === req.user._id.toString();
-    const isDepartmentOfficer = req.user.role === 'department_officer' && 
-                               petition.category === req.user.department;
-
-    if (!isCreator && !isDepartmentOfficer) {
-      return res.status(403).json({
-        error: 'You do not have permission to comment on this petition'
-      });
-    }
-
-    petition.comments.push({
-      text: req.body.text,
-      user: req.user._id,
-      userRole: req.user.role
-    });
-
-    await petition.save();
-    await petition.populate('comments.user', 'mobile');
-
-    res.json({
-      message: 'Comment added successfully',
-      data: petition.comments[petition.comments.length - 1]
-    });
+    res.status(200).json({ message: "Petitions retrieved successfully", petitions });
   } catch (error) {
-    res.status(500).json({
-      error: 'Failed to add comment: ' + error.message
-    });
+    console.error("Error fetching department petitions:", error);
+    res.status(500).json({ message: 'Error fetching petitions', error });
+  }
+  
+};
+
+export const getAllPetitions = async (req, res) => {
+  try {
+    const petitions = await Petition.find();
+    res.status(200).json({ message: "Petitions retrieved successfully", petitions });
+  } catch (error) {
+    console.error("Error fetching all petitions:", error);
+    res.status(500).json({ message: 'Error fetching petitions', error });
   }
 };

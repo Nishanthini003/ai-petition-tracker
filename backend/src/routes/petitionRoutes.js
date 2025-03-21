@@ -5,19 +5,20 @@ import {
   getPetitions,
   getPetition,
   updatePetition,
-  addComment
+  getDepartmentPetitions,
+  getAllPetitions
 } from '../controllers/petitionController.js';
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(protect);
+// router.use(protect);
 
 // Create a new petition
 router.post('/', createPetition);
 
 // Get all petitions (with filters)
-router.get('/', getPetitions);
+// router.get('/', getPetitions);
 
 // Get a single petition
 router.get('/:id', getPetition);
@@ -25,7 +26,8 @@ router.get('/:id', getPetition);
 // Update a petition
 router.patch('/:id', updatePetition);
 
-// Add a comment to a petition
-router.post('/:id/comments', addComment);
+
+// Get petitions for a department officer
+router.get('/', getAllPetitions);
 
 export default router;

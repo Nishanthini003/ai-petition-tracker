@@ -9,16 +9,10 @@ const userSchema = new mongoose.Schema({
     },
     trim: true
   },
-  mobile: {
+  email: {
     type: String,
     required: true,
-    unique: true,
-    validate: {
-      validator: function(v) {
-        return /^\d{10}$/.test(v);
-      },
-      message: props => `${props.value} is not a valid 10-digit mobile number!`
-    }
+    unique: true
   },
   password: {
     type: String,
@@ -32,8 +26,13 @@ const userSchema = new mongoose.Schema({
   },
   department: {
     type: String,
-    enum: ['water', 'electricity', 'roads', 'sanitation', 'education'],
-    required: function() {
+    enum: [
+      'Environment', 'Justice', 'Health', 'Education', 'Housing',
+      'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance',
+      'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 
+      'Consumer Affairs'
+    ],
+    required: function () {
       return this.role === 'department_officer';
     }
   },

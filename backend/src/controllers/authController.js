@@ -11,10 +11,10 @@ const generateToken = (id) => {
 // Regular user signup
 export const signup = async (req, res) => {
   try {
-    const { mobile, password } = req.body;
+    const { email, password } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ mobile });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         error: 'User already exists'
@@ -23,7 +23,7 @@ export const signup = async (req, res) => {
 
     // Create user
     const user = await User.create({
-      mobile,
+      email,
       password,
       role: 'user'
     });
@@ -36,7 +36,7 @@ export const signup = async (req, res) => {
       data: {
         user: {
           _id: user._id,
-          mobile: user.mobile,
+          email: user.email,
           role: user.role
         }
       },
@@ -93,13 +93,13 @@ export const officerSignup = async (req, res) => {
 // Login
 export const login = async (req, res) => {
   try {
-    const { mobile, password } = req.body;
+    const { email, password } = req.body;
 
     // Check if user exists
-    const user = await User.findOne({ mobile });
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({
-        error: 'Invalid mobile number or password'
+        error: 'Invalid email or password'
       });
     }
 
@@ -107,7 +107,7 @@ export const login = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
-        error: 'Invalid mobile number or password'
+        error: 'Invalid email or password'
       });
     }
 
@@ -120,7 +120,7 @@ export const login = async (req, res) => {
         user: {
           _id: user._id,
           name: user.name,
-          mobile: user.mobile,
+          email: user.email,
           role: user.role,
           department: user.department
         }
