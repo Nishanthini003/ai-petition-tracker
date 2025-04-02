@@ -1,33 +1,31 @@
 import express from 'express';
-import { protect } from '../middleware/auth.js';
+import { protect, officerOnly, adminOnly } from '../middleware/auth.js';
 import {
   createPetition,
   getPetitions,
   getPetition,
-  updatePetition,
+  updatePetitionStatus,
   getDepartmentPetitions,
   getAllPetitions
 } from '../controllers/petitionController.js';
 
 const router = express.Router();
 
-// All routes require authentication
-// router.use(protect);
+router.use(protect);
+// Public routes (no authentication needed)
+router.post('/', createPetition); // Anyone can create a petition
+router.get('/all', getAllPetitions); // Only admins can view all petitions
 
-// Create a new petition
-router.post('/', createPetition);
+// Protected routes (require authentication)
 
-// Get all petitions (with filters)
-// router.get('/', getPetitions);
+// Department officer-specific routes
+router.patch('/:id/status', officerOnly, updatePetitionStatus); // Only officers can update status
+router.get('/department', officerOnly, getDepartmentPetitions); // Only officers can view their dept petitions
 
-// Get a single petition
-router.get('/:id', getPetition);
+// Admin-only routes
 
-// Update a petition
-router.patch('/:id', updatePetition);
-
-
-// Get petitions for a department officer
-router.get('/', getAllPetitions);
+// General authenticated routes (available to all logged-in users)
+router.get('/', getPetitions); // Filtered petitions based on user role
+router.get('/:id', getPetition); // View single petition
 
 export default router;

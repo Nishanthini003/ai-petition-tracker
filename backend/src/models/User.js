@@ -2,17 +2,12 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: function() {
-      return this.role === 'department_officer';
-    },
-    trim: true
-  },
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    trim: true,
+    lowercase: true
   },
   password: {
     type: String,
@@ -21,24 +16,14 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'department_officer', 'admin'],
     default: 'user'
-  },
-  department: {
-    type: String,
-    enum: [
-      'Environment', 'Justice', 'Health', 'Education', 'Housing',
-      'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance',
-      'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 
-      'Consumer Affairs'
-    ],
-    required: function () {
-      return this.role === 'department_officer';
-    }
   },
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date
   }
 });
 

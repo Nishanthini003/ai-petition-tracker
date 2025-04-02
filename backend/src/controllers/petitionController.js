@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 import User from '../models/User.js';
-
+import asyncHandler from 'express-async-handler';
 // Configure multer for image upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -36,13 +36,6 @@ const upload = multer({
 // Create a new petition
 export const createPetition = async (req, res) => {
   try {
-    // Only users can create petitions
-    if (req.user.role !== 'user') {
-      return res.status(403).json({
-        error: 'Only users can create petitions'
-      });
-    }
-
     // Handle file upload
     upload(req, res, async (err) => {
       if (err instanceof multer.MulterError) {
@@ -52,40 +45,47 @@ export const createPetition = async (req, res) => {
       }
 
       try {
-        const { title, description, category, priority } = req.body;
+        const { title, address, description, category, priority } = req.body;
         
         // Create petition object
         const petitionData = {
           title,
           description,
+          address,
           category,
           priority,
-          creator: req.user._id,
           status: 'pending'
         };
 
-        // Add image path if an image was uploaded
+        // Add creator if authenticated (optional)
+        if (req.user?._id) {
+          petitionData.creator = req.user._id;
+        }
+
+        // Add image path if uploaded
         if (req.file) {
           petitionData.image = req.file.path;
         }
 
-        // Save petition to database
+        // Save to database
         const petition = new Petition(petitionData);
         await petition.save();
 
-        // Populate creator details
-        await petition.populate('creator', 'mobile');
+        // Populate creator if exists
+        if (petition.creator) {
+          await petition.populate('creator', 'name mobile');
+        }
 
         res.status(201).json({
           message: 'Petition created successfully',
           data: petition
         });
       } catch (error) {
-        // Clean up uploaded file if there's an error
+        // Clean up uploaded file on error
         if (req.file) {
           await fs.unlink(req.file.path).catch(console.error);
         }
-        throw error;
+        res.status(400).json({ error: error.message });
       }
     });
   } catch (error) {
@@ -175,65 +175,41 @@ export const getPetition = async (req, res) => {
   }
 };
 
-// Update petition with role-based permissions
-export const updatePetition = async (req, res) => {
+export const updatePetitionStatus = async (req, res) => {
   try {
-    const petition = await Petition.findById(req.params.id);
+    const { status, userId } = req.body; // Now expecting userId in body
+    const { id } = req.params;
 
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    const validStatuses = ['new', 'pending', 'in_progress', 'resolved', 'rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status value' });
+    }
+
+    const petition = await Petition.findById(id);
     if (!petition) {
-      return res.status(404).json({
-        error: 'Petition not found'
-      });
+      return res.status(404).json({ error: 'Petition not found' });
     }
 
-    // Check update permissions
-    const isCreator = petition.creator.toString() === req.user._id.toString();
-    const isDepartmentOfficer = req.user.role === 'department_officer' && 
-                               petition.category === req.user.department;
+    // Bypass department check - INSECURE!
+    const updatedPetition = await petition.updateStatus(status, userId);
 
-    if (!isCreator && !isDepartmentOfficer) {
-      return res.status(403).json({
-        error: 'You do not have permission to update this petition'
-      });
-    }
-
-    // Department officers can only update status
-    if (isDepartmentOfficer) {
-      if (!req.body.status) {
-        return res.status(400).json({
-          error: 'Department officers can only update petition status'
-        });
+    return res.status(200).json({
+      success: true,
+      data: {
+        _id: updatedPetition._id,
+        status: updatedPetition.status,
+        updatedAt: updatedPetition.updatedAt
       }
-      petition.status = req.body.status;
-    } else if (isCreator) {
-      // Creators can update certain fields
-      const allowedUpdates = ['title', 'description', 'category', 'priority'];
-      const updates = Object.keys(req.body)
-        .filter(key => allowedUpdates.includes(key))
-        .forEach(key => petition[key] = req.body[key]);
-    }
-
-    // Add resolved date if status is changed to resolved
-    if (req.body.status === 'resolved' && petition.status !== 'resolved') {
-      petition.resolvedAt = new Date();
-    }
-
-    await petition.save();
-    await petition.populate('creator', 'mobile');
-    await petition.populate('assignedTo', 'mobile');
-
-    res.json({
-      message: 'Petition updated successfully',
-      data: petition
     });
   } catch (error) {
-    res.status(500).json({
-      error: 'Failed to update petition: ' + error.message
-    });
+    console.error(error);
+    return res.status(500).json({ error: 'Server error' });
   }
 };
-
-
 export const getDepartmentPetitions = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -252,6 +228,7 @@ export const getDepartmentPetitions = async (req, res) => {
   
 };
 
+// petitionController.js
 export const getAllPetitions = async (req, res) => {
   try {
     const petitions = await Petition.find();

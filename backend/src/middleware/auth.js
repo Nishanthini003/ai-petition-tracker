@@ -3,41 +3,35 @@ import User from '../models/User.js';
 
 export const protect = async (req, res, next) => {
   try {
-    // Get token from header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Please log in to access this resource'
-      });
+    // Skip authentication for specific public routes
+    if (req.path === '/petitions' && req.method === 'POST') {
+      return next();
     }
 
-    const token = authHeader.split(' ')[1];
+    // Check for token in headers
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) {
+      return res.status(401).json({ error: 'Not authorized, no token' });
+    }
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Check if user still exists
-    const user = await User.findById(decoded.id).select('_id mobile role');
-    if (!user) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'User no longer exists'
-      });
+    
+    // Get user from token
+    req.user = await User.findById(decoded.id).select('-password');
+    
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authorized, user not found' });
     }
 
-    // Grant access to protected route
-    req.user = {
-      _id: user._id,
-      mobile: user.mobile,
-      role: user.role
-    };
     next();
   } catch (error) {
-    res.status(401).json({
-      status: 'error',
-      message: 'Please log in to access this resource'
-    });
+    console.error('Authentication error:', error);
+    res.status(401).json({ error: 'Not authorized, token failed' });
   }
 };
 
@@ -51,4 +45,22 @@ export const restrictTo = (...roles) => {
     }
     next();
   };
+};
+export const officerOnly = (req, res, next) => {
+  if (req.user?.role === 'department_officer') {
+    next();
+  } else {
+    res.status(403);
+    throw new Error('Not authorized as an officer');
+  }
+};
+
+// Admin-only middleware
+export const adminOnly = (req, res, next) => {
+  if (req.user?.role === 'admin') {
+    next();
+  } else {
+    res.status(403);
+    throw new Error('Not authorized as admin');
+  }
 };

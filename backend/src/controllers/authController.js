@@ -1,5 +1,76 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import DepartmentOfficer from '../models/DeptOfficer.js';
+import bcrypt from 'bcryptjs';
+import twilio from 'twilio'
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const phone = process.env.TWILIO_PHONE_NUMBER;
+const client = new twilio(accountSid, authToken);
+const otpStore = {};
+
+export const sendOtp = async (req, res) => {
+  try {
+    let { phoneNumber } = req.body;
+    // Generate OTP
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    otpStore[phoneNumber] = otp;
+    if (!phoneNumber.startsWith('+')) {
+      phoneNumber = `+91${phoneNumber}`; // Assuming India as default
+    }
+    // Send OTP using Twilio
+    try {
+      const response = await client.messages.create({
+        body: `Your OTP is ${otp}`,
+        to: phoneNumber,
+        from: phone // Your Twilio number
+      });
+      console.log(response);
+    } catch (err) {
+      console.log(err);
+      return res.status(500).json({ message: 'Failed to send OTP' });
+    }
+
+    res.json({
+      status: 'success',
+      message: 'OTP sent successfully',
+      otp
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const verifyOtp = async (req, res) => {
+  try {
+    const { phoneNumber, otp } = req.body;
+    console.log(otp);
+    console.log(otpStore);
+    console.log(otpStore[phoneNumber]);
+    
+    // Validate OTP
+    if (otpStore[phoneNumber] !== otp) {
+      return res.status(401).json({
+        error: 'Invalid OTP'
+      });
+    }
+    
+    // Remove OTP from store
+    delete otpStore[phoneNumber];
+    
+    res.json({
+      status: 'success',
+      message: 'OTP verified successfully'
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
 // Generate JWT token
 const generateToken = (id) => {
@@ -50,45 +121,48 @@ export const signup = async (req, res) => {
 };
 
 // Department officer signup
-export const officerSignup = async (req, res) => {
+export const officerLogin = async (req, res) => {
   try {
-    const { name, mobile, password, department } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ mobile });
-    if (existingUser) {
-      return res.status(400).json({
-        error: 'User already exists'
-      });
+    const { email, badgeNumber, password } = req.body;
+    console.log(email, badgeNumber, password);
+    
+    // Check if officer exists with email and badgeNumber
+    const officer = await DepartmentOfficer.findOne({ email, badgeNumber });
+    
+    if (!officer) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
-
-    // Create department officer
-    const user = await User.create({
-      name,
-      mobile,
-      password,
-      department,
-      role: 'department_officer'
-    });
-
-    res.status(201).json({
-      message: 'Department officer created successfully',
-      data: {
-        user: {
-          _id: user._id,
-          name: user.name,
-          mobile: user.mobile,
-          role: user.role,
-          department: user.department
-        }
+    
+    // Compare passwords
+    const isMatch = await bcrypt.compare(password, officer.password);
+    
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    
+    // Generate JWT token
+    const token = generateToken(officer._id);
+    
+    res.json({
+      status: 'success',
+      token,
+      user: {
+        _id: officer._id,
+        email: officer.email,
+        name: officer.name,
+        badgeNumber: officer.badgeNumber,
+        department: officer.department,
+        role: 'department_officer',
+        photo: officer.photo
       }
     });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Error creating department officer: ' + error.message
-    });
+    
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
+
+
 
 // Login
 export const login = async (req, res) => {
