@@ -19,8 +19,8 @@ router.get('/all', getAllPetitions); // Only admins can view all petitions
 // Protected routes (require authentication)
 
 // Department officer-specific routes
-router.patch('/:id/status', officerOnly, updatePetitionStatus); // Only officers can update status
-router.get('/department', officerOnly, getDepartmentPetitions); // Only officers can view their dept petitions
+router.patch('/:id/status', updatePetitionStatus); // Only officers can update status
+router.get('/department', getDepartmentPetitions); // Only officers can view their dept petitions
 
 // Admin-only routes
 

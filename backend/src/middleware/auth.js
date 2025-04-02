@@ -8,6 +8,13 @@ export const protect = async (req, res, next) => {
       return next();
     }
 
+    if(req.path === '/all' && req.method === 'GET') {
+      return next();
+    }
+    if(req.path === '/:id/status' && req.method === 'PATCH') {
+      return next();
+    }
+
     // Check for token in headers
     let token;
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -22,7 +29,7 @@ export const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Get user from token
-    req.user = await User.findById(decoded.id).select('-password');
+    req.user = await User.findById(decoded.id).select('password');
     
     if (!req.user) {
       return res.status(401).json({ error: 'Not authorized, user not found' });
