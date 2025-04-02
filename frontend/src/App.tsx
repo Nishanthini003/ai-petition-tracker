@@ -11,6 +11,7 @@ import { OfficerLogin } from './pages/officer/OfficerLogin';
 import OfficerRegister from './pages/officer/OfficerRegister';
 import OfficerDashboard from './pages/officer/OfficerDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import Demo from './pages/demo';
 import type { RootState } from './store';
 
 // Configure future flags
@@ -68,7 +69,7 @@ const App = () => {
             path="/notifications"
             element={
               <DashboardLayout>
-                <Notifications />
+                <Demo />
               </DashboardLayout>
             }
           />

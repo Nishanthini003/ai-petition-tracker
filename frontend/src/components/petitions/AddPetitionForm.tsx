@@ -8,6 +8,8 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "../../config/fireBaseConfig";
 import { v4 as uuidv4 } from "uuid";
 import { auth } from "../../services/api";
+import { recognize } from 'tesseract.js';
+
 import axios from "axios";
 interface AddPetitionFormProps {
   onSuccess: () => void;
@@ -163,51 +165,54 @@ const [locationError, setLocationError] = useState("");
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
+  
     if (file.size > 5 * 1024 * 1024) {
       setError("Image size should be less than 5MB");
       return;
     }
-
+  
     setImageUpload(file);
-
+  
     // Generate image preview
     const reader = new FileReader();
     reader.onloadend = () => setImagePreview(reader.result as string);
     reader.readAsDataURL(file);
-
+  
     setExtractingText(true);
     setProgress(0);
-
+  
     try {
       // Upload Image to Firebase Storage
       const uploadedImageUrl = await uploadFile(file);
       if (uploadedImageUrl) {
         setFormData((prev) => ({ ...prev, imageUrl: uploadedImageUrl }));
-
-        const extractedText = await extractTextFromImage(uploadedImageUrl);
-        console.log(extractedText);
+  
+        // Process the local file instead of the URL to avoid CORS
+        const { data: { text } } = await recognize(file, 'eng', {
+          logger: (m) => setProgress(Math.round(m.progress * 100)),
+        });
         
-        if (extractedText) {
-          const formattedData = await getFromGemini(extractedText);
+        if (text) {
+          const formattedData = await getFromGemini(text);
           if (formattedData) {
             setFormData((prev) => ({
               ...prev,
               title: formattedData.title || prev.title,
               description: formattedData.content || prev.description,
               category: formattedData.category || prev.category,
+              address: formattedData.address || prev.address
             }));
           }
         }
       }
     } catch (error) {
-      setError("Error processing the image.");
+      console.error("OCR Error:", error);
+      setError("Error processing the image. Please try another image.");
     } finally {
       setExtractingText(false);
       setProgress(0);
     }
   };
-
   /** Handles form submission */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
