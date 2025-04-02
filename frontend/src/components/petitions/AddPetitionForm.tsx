@@ -1,32 +1,36 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { extractTextFromImage } from "../../services/ocr";
-import { getFromDeepseek } from "../../services/deepSeek";
+import { getFromGemini } from "../../services/deepSeek";
 import { petitions } from "../../services/api";
 import type { RootState } from "../../store";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "../../config/fireBaseConfig";
 import { v4 as uuidv4 } from "uuid";
-
+import { auth } from "../../services/api";
+import axios from "axios";
 interface AddPetitionFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
 
 const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
-  const { token } = useSelector((state: RootState) => state.auth);
-
+  const { user } = useSelector((state: RootState) => state.auth);
+  console.log(user?._id);
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [extractingText, setExtractingText] = useState(false);
   const [progress, setProgress] = useState<number>(0); // Track upload progress
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+const [locationError, setLocationError] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUpload, setImageUpload] = useState<File | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
+    address: "",
     description: "",
     category: "",
     priority: "medium" as "low" | "medium" | "high",
@@ -72,6 +76,89 @@ const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
     }
   };
 
+  const getCurrentLocationAddress = async () => {
+    setIsGettingLocation(true);
+    setLocationError("");
+  
+    try {
+      // First check if geolocation is available
+      if (!navigator.geolocation) {
+        throw new Error("Geolocation is not supported by your browser");
+      }
+  
+      // Get current position with timeout
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: true,
+            timeout: 10000, // 10 seconds
+            maximumAge: 0 // Don't use cached position
+          }
+        );
+      });
+  
+      const { latitude, longitude } = position.coords;
+  
+      // Verify we got valid coordinates
+      if (!latitude || !longitude) {
+        throw new Error("Invalid coordinates received");
+      }
+  
+      // Reverse geocoding using OpenStreetMap
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+        {
+          headers: {
+            'Accept-Language': 'en', // Request English results
+          }
+        }
+      );
+  
+      if (response.data.error) {
+        throw new Error("Could not convert coordinates to address");
+      }
+  
+      const { address } = response.data;
+      const formattedAddress = [
+        address.road,
+        address.neighbourhood,
+        address.suburb,
+        address.city,
+        address.town,
+        address.village,
+        address.state,
+        address.country
+      ]
+        .filter(Boolean)
+        .join(", ");
+  
+      setFormData(prev => ({ ...prev, address: formattedAddress }));
+      setLocationError("");
+  
+    } catch (error: any) {
+      console.error("Location error:", error);
+      
+      let errorMessage = "Could not get location. Please enter manually.";
+      
+      if (error.code === 1) { // PERMISSION_DENIED
+        errorMessage = "Location access was denied. Please enable permissions in your browser settings.";
+      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        errorMessage = "Location information is unavailable. Please check your GPS/WiFi connection.";
+      } else if (error.code === 3) { // TIMEOUT
+        errorMessage = "Location request timed out. Please try again.";
+      } else if (error.message.includes("coordinates")) {
+        errorMessage = "Invalid location data received.";
+      } else if (error.message.includes("supported")) {
+        errorMessage = "Geolocation is not supported by your browser.";
+      }
+  
+      setLocationError(errorMessage);
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
   /** Handles image selection, preview, and uploads the image */
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,8 +186,10 @@ const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
         setFormData((prev) => ({ ...prev, imageUrl: uploadedImageUrl }));
 
         const extractedText = await extractTextFromImage(uploadedImageUrl);
+        console.log(extractedText);
+        
         if (extractedText) {
-          const formattedData = await getFromDeepseek(extractedText);
+          const formattedData = await getFromGemini(extractedText);
           if (formattedData) {
             setFormData((prev) => ({
               ...prev,
@@ -126,7 +215,10 @@ const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
     setError("");
 
     try {
-      await petitions.create(formData);
+      // const response = await axios.post(`http://localhost:5000/api/petitions/${user?._id}`, formData);
+      const response = await petitions.create(formData);
+      console.log(response);
+      // await petitions.create(formData);
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to create petition");
@@ -134,6 +226,11 @@ const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
       setLoading(false);
     }
   };
+
+  useEffect(()=>{
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+  }}, [])
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -173,6 +270,50 @@ const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
         <label className="block text-sm font-medium text-gray-700">Title</label>
         <input type="text" name="title" className="input-field w-full border  border-gray-300 " value={formData.title} onChange={handleInputChange} required />
       </div>
+
+      {/* Address Field - Updated with Location Button */}
+    <div>
+    <label className="block text-sm font-medium text-gray-700">
+      Address
+      <button
+        type="button"
+        onClick={getCurrentLocationAddress}
+        disabled={isGettingLocation}
+        className="ml-2 text-sm text-blue-600 hover:text-blue-800"
+      >
+        {isGettingLocation ? (
+          <span className="inline-flex items-center">
+            <svg className="animate-spin -ml-1 mr-1 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Detecting...
+          </span>
+        ) : (
+          "Use my current location"
+        )}
+      </button>
+    </label>
+    
+    <input
+      type="text"
+      name="address"
+      className="input-field w-full border border-gray-300 mt-1"
+      value={formData.address}
+      onChange={handleInputChange}
+      required
+    />
+    
+    {locationError && (
+      <div className="mt-1 text-sm text-red-600 flex items-start">
+        <svg className="h-4 w-4 mr-1 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+        </svg>
+        <span>{locationError}</span>
+      </div>
+    )}
+    </div>
+        
 
       {/* Description */}
       <div>

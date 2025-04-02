@@ -68,18 +68,16 @@ export const auth = {
       throw error;
     }
   },
-  officerSignup: async (data: {
-    name: string;
-    email: string;
-    password: string;
-    department: string;
-    role: string;
-  }) => {
+  officerLogin: async (email: string, badgeNumber: string, password: string) => {
     try {
-      const response = await api.post('/auth/officer/signup', data);
+      const response = await api.post('/auth/officer/login', { 
+        email, 
+        badgeNumber, 
+        password 
+      });
       return response.data;
     } catch (error) {
-      console.error('Officer signup failed:', error);
+      console.error('Officer login failed:', error);
       throw error;
     }
   }
@@ -89,11 +87,24 @@ export const petitions = {
   create: async (data: {
     title: string;
     description: string;
+    address: string,
     category: string;
-    priority: string;
+    priority?: string;
   }) => {
+    const formData = new FormData();
+    
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined) {
+        formData.append(key, value);
+      }
+    });
     try {
-      const response = await api.post('/petitions', data);
+      const response = await api.post('/petitions', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log('Petition created:', response.data);
       return response.data;
     } catch (error) {
       console.error('Create petition failed:', error);
@@ -205,4 +216,24 @@ export const officer = {
   }
 };
 
+export const fetchAllPetitions = async () => {
+  try {
+    const response = await api.get('/petitions/all');
+    return response.data.petitions;
+  } catch (error) {
+    console.error('Fetch petitions failed:', error);
+    throw error;
+  }
+};
+export const updatePetitionStatus = async (petitionId: string, newStatus: string) => {
+  try {
+    const response = await axios.patch(`/api/petitions/${petitionId}/status`, {
+      status: newStatus,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Status update failed:', error);
+    throw error.response.data;
+  }
+};
 export default api;

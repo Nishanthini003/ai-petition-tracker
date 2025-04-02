@@ -1,40 +1,68 @@
 import axios from "axios";
 
-const API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const API_KEY = "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";
+interface GeminiResponse {
+  title: string;
+  content: string;
+  address: string;
+  category: string;
+}
 
-export const getFromDeepseek = async (text: string) => {
+const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const API_KEY = "AIzaSyDlHxdq_vyQGyxuLQQ1vIQ6ZWQUsa2_6Gg"; // Replace with your actual API key
+
+export const getFromGemini = async (text: string): Promise<GeminiResponse | null> => {
   try {
     const response = await axios.post(
-      API_URL,
+      `${API_URL}?key=${API_KEY}`,
       {
-        model: "deepseek/deepseek-r1",
-        messages: [
-          {
-            role: "user",
-            content: `Analyze the following text and return only a valid JSON response formatted as { "title": "", "content": "", "category": " Title is what the content is based on, content is what they are conveying, and category is the category (water, sewage, electricity, etc.)" }.
-              Input: ${text}`,
-          },
-        ],
+        contents: [{
+          parts: [{
+            text: `Analyze the following text and return only a valid JSON response formatted as: 
+            { 
+              "title": "", 
+              "content": "", 
+              "address": "", 
+              "category": ""
+            }
+            Categories must be one of: ['Environment', 'Justice', 'Health', 'Education', 'Housing', 'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance', 'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 'Consumer Affairs']
+            Input text to analyze: ${text}`
+          }]
+        }],
+        generationConfig: {
+          response_mime_type: "application/json" // Encourage JSON response
+        }
       },
       {
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       }
     );
 
-    const content = response.data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Empty response from DeepSeek API.");
+    console.log("Full API response:", response.data);
 
-    // Extract JSON from response
+    // Extract the generated text content
+    const content = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content) {
+      throw new Error("Empty response from Gemini API");
+    }
+
+    console.log("Raw content:", content);
+
+    // Safely extract and parse JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Invalid JSON format from DeepSeek API.");
+    if (!jsonMatch) {
+      throw new Error("Invalid JSON format from Gemini API");
+    }
 
-    return JSON.parse(jsonMatch[0]);
+    try {
+      const parsedData = JSON.parse(jsonMatch[0]) as GeminiResponse;
+      return parsedData;
+    } catch (parseError) {
+      throw new Error("Failed to parse JSON response");
+    }
   } catch (error: any) {
-    console.error("Error in DeepSeek API:", error.response?.data || error.message);
+    console.error("Error in Gemini API:", error.response?.data || error.message);
     return null;
   }
 };
