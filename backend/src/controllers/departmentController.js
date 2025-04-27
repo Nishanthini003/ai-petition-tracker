@@ -105,11 +105,13 @@ export const updateOfficer = async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // If password is being updated, hash it first
+    // Remove password from updateData if it exists
     if (updateData.password) {
-      updateData.password = await bcrypt.hash(updateData.password, 12);
-      updateData.updatedAt = new Date();
+      delete updateData.password;
     }
+
+    // Update the updatedAt field
+    updateData.updatedAt = new Date();
 
     const updatedOfficer = await DepartmentOfficer.findByIdAndUpdate(
       id,

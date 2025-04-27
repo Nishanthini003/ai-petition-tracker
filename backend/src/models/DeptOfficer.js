@@ -10,9 +10,7 @@ const departmentOfficerSchema = new mongoose.Schema({
     lowercase: true
   },
   password: {
-    type: String,
-    required: true,
-    minlength: 6
+    type: String
   },
   name: {
     type: String,
@@ -32,7 +30,7 @@ const departmentOfficerSchema = new mongoose.Schema({
     enum: [
       'Environment', 'Justice', 'Health', 'Education', 'Housing',
       'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance',
-      'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 
+      'Public Safety', 'Social Welfare', 'Water', 'Communications', 
       'Consumer Affairs'
     ],
     required: true

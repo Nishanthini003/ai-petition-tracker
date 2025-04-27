@@ -14,10 +14,14 @@ const petitionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  submittedBy: {
+    type: String,
+    required: true
+  },
   category: {
     type: String,
     required: true,
-    enum: ['Environment', 'Justice', 'Health', 'Education', 'Housing', 'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance', 'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 'Consumer Affairs'],
+    enum: ['Environment', 'Justice', 'Health', 'Education', 'Housing', 'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance', 'Public Safety', 'Social Welfare', 'Water', 'Communications', 'Consumer'],
   },
   creator: {
     type: mongoose.Schema.Types.ObjectId,
@@ -56,10 +60,18 @@ const petitionSchema = new mongoose.Schema({
     url: String,
     type: String
   }],
+  comments:[
+    {
+      text: {
+        type: String
+      }
+    }
+  ],
   timeline: [{
     status: {
       type: String,
-      enum: ['new', 'pending', 'in_progress', 'resolved', 'rejected']
+      enum: ['new', 'pending', 'in_progress', 'resolved', 'rejected'],
+      default: 'new'
     },
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,

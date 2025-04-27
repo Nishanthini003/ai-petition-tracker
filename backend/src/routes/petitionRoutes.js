@@ -6,20 +6,26 @@ import {
   getPetition,
   updatePetitionStatus,
   getDepartmentPetitions,
-  getAllPetitions
+  getAllPetitions,
+  classifyPetition,
+  getPetitionsAdmin,
+  getPetitionsByUser,
+  addComment
 } from '../controllers/petitionController.js';
 
 const router = express.Router();
-
+router.get('/user/:userId', getPetitionsByUser); // View petitions by user ID
+router.post('/:id/comment', addComment);
+router.get('/admin', getPetitionsAdmin); // Only admins can view all petitions
+router.post('/classify', classifyPetition);
+router.patch('/:id/status', updatePetitionStatus); // Only officers can update status
 router.use(protect);
 // Public routes (no authentication needed)
 router.post('/', createPetition); // Anyone can create a petition
 router.get('/all', getAllPetitions); // Only admins can view all petitions
-
 // Protected routes (require authentication)
 
 // Department officer-specific routes
-router.patch('/:id/status', updatePetitionStatus); // Only officers can update status
 router.get('/department', getDepartmentPetitions); // Only officers can view their dept petitions
 
 // Admin-only routes

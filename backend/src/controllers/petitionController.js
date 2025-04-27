@@ -4,6 +4,9 @@ import path from 'path';
 import fs from 'fs/promises';
 import User from '../models/User.js';
 import asyncHandler from 'express-async-handler';
+import axios from 'axios';
+import { NGROK_URL } from '../services/urls.js';
+import mongoose from 'mongoose';
 // Configure multer for image upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -45,7 +48,7 @@ export const createPetition = async (req, res) => {
       }
 
       try {
-        const { title, address, description, category, priority } = req.body;
+        const { title, address, description, category, priority, contact, submittedBy } = req.body;
         
         // Create petition object
         const petitionData = {
@@ -54,7 +57,9 @@ export const createPetition = async (req, res) => {
           address,
           category,
           priority,
-          status: 'pending'
+          status: 'pending',
+          contact,
+          submittedBy
         };
 
         // Add creator if authenticated (optional)
@@ -177,25 +182,20 @@ export const getPetition = async (req, res) => {
 
 export const updatePetitionStatus = async (req, res) => {
   try {
-    const { status, userId } = req.body; // Now expecting userId in body
+    const { status } = req.body; // Now expecting userId in body
     const { id } = req.params;
-
-    if (!userId) {
+    console.log(status, id);
+    
+    if (!id) {
       return res.status(400).json({ error: "User ID is required" });
     }
 
-    const validStatuses = ['new', 'pending', 'in_progress', 'resolved', 'rejected'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status value' });
-    }
-
-    const petition = await Petition.findById(id);
+    const petition = await Petition.findById(id)
     if (!petition) {
       return res.status(404).json({ error: 'Petition not found' });
     }
 
-    // Bypass department check - INSECURE!
-    const updatedPetition = await petition.updateStatus(status, userId);
+    const updatedPetition = await petition.updateOne({ status })
 
     return res.status(200).json({
       success: true,
@@ -204,12 +204,13 @@ export const updatePetitionStatus = async (req, res) => {
         status: updatedPetition.status,
         updatedAt: updatedPetition.updatedAt
       }
-    });
+    })
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Server error' });
   }
 };
+
 export const getDepartmentPetitions = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -228,6 +229,32 @@ export const getDepartmentPetitions = async (req, res) => {
   
 };
 
+export const getPetitionsAdmin = async (req, res) => {
+  try {
+    // Use query parameter instead of body for GET requests
+    const department = req.query.department;
+    
+    // Build query - if department specified, filter by it
+    const query = department ? { category: department } : {};
+    
+    const petitions = await Petition.find(query)
+      .sort({ createdAt: -1 }); // Optional: sort by newest first
+
+    res.status(200).json({
+      success: true,
+      count: petitions.length,
+      data: petitions
+    });
+  } catch (error) {
+    console.error("Error fetching petitions:", error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching petitions',
+      error: error.message 
+    });
+  }
+};
+
 // petitionController.js
 export const getAllPetitions = async (req, res) => {
   try {
@@ -236,5 +263,95 @@ export const getAllPetitions = async (req, res) => {
   } catch (error) {
     console.error("Error fetching all petitions:", error);
     res.status(500).json({ message: 'Error fetching petitions', error });
+  }
+};
+
+export const classifyPetition = async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    const response = await axios.post(`${NGROK_URL}/classify`, {
+      title,
+      description
+    })
+    console.log(response.data.predicted_category);
+    if(response.data){
+      res.status(200).json({
+        success: true,
+        category: response.data.predicted_category
+      })
+    }
+  } catch (error) {
+    console.error("API Error:", error);
+    res.status(500).json({ error: 'Failed to communicate with the classification service. Please try again later.' });
+  }
+}
+
+export const getPetitionsByUser = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    
+    // Validate the userId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
+
+    const petitions = await Petition.find({ creator: userId })
+      .populate('creator', 'name email') // Populate creator details (adjust fields as needed)
+      .populate('assignedTo', 'name email') // Populate assigned user details
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    if (!petitions || petitions.length === 0) {
+      return res.status(200).json({ 
+        message: 'No petitions found for this user',
+        petitions: [] 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: petitions.length,
+      data: petitions
+    });
+
+  } catch (error) {
+    console.error('Error fetching user petitions:', error);
+    res.status(500).json({ 
+      message: 'Server error while fetching petitions',
+      error: error.message 
+    });
+  }
+};
+
+export const addComment = async (req, res) => {
+  try {
+    const petitionId = req.params.id;
+    console.log(petitionId);
+    
+    const { comment } = req.body;
+
+    const petition = await Petition.findById(petitionId);
+    if (!petition) {
+      return res.status(404).json({ message: 'Petition not found' });
+    }
+
+    // Add the comment
+    petition.comments.push({
+      text: comment
+    });
+    // Save the updated petition
+    await petition.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Comment added successfully',
+      petition
+    });
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while adding comment',
+      error: error.message 
+    });
   }
 };
