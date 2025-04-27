@@ -1,13 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useSelector } from "react-redux";
-import { extractTextFromImage } from "../../services/ocr";
 import { getFromGemini } from "../../services/deepSeek";
 import { petitions } from "../../services/api";
 import type { RootState } from "../../store";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { storage } from "../../config/fireBaseConfig";
 import { v4 as uuidv4 } from "uuid";
-import { auth } from "../../services/api";
 import { recognize } from 'tesseract.js';
 
 import axios from "axios";
@@ -18,8 +16,7 @@ interface AddPetitionFormProps {
 
 const AddPetitionForm = ({ onSuccess, onCancel }: AddPetitionFormProps) => {
   const { user } = useSelector((state: RootState) => state.auth);
-  console.log(user?._id);
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [extractingText, setExtractingText] = useState(false);
@@ -37,15 +34,15 @@ const [locationError, setLocationError] = useState("");
     category: "",
     priority: "medium" as "low" | "medium" | "high",
     imageUrl: "",
+    contact: "",
+    submittedBy: "",
   });
 
-  /** Handles form input changes */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  /** Uploads the image to Firebase Storage and tracks progress */
   const uploadFile = async (file: File): Promise<string | null> => {
     if (!file) return null;
     try {
@@ -78,63 +75,116 @@ const [locationError, setLocationError] = useState("");
     }
   };
 
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      return;
+    }
+  
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'geolocation' })
+        .then(permissionStatus => {
+          if (permissionStatus.state === 'denied') {
+            setLocationError("Location permissions were previously denied. Please enable them in your browser settings.");
+          }
+          permissionStatus.onchange = () => {
+            if (permissionStatus.state === 'denied') {
+              setLocationError("Location permissions were denied. Please enable them in your browser settings.");
+            }
+          };
+        });
+    }
+  }, []);
+
   const getCurrentLocationAddress = async () => {
     setIsGettingLocation(true);
     setLocationError("");
   
     try {
-      // First check if geolocation is available
+      // Check if geolocation is available
       if (!navigator.geolocation) {
         throw new Error("Geolocation is not supported by your browser");
       }
   
-      // Get current position with timeout
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          reject,
-          {
-            enableHighAccuracy: true,
-            timeout: 10000, // 10 seconds
-            maximumAge: 0 // Don't use cached position
-          }
-        );
-      });
+      // First try with high accuracy (may take longer)
+      let position: GeolocationPosition;
+      try {
+        position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            reject,
+            {
+              enableHighAccuracy: true,
+              timeout: 10000, // 10 seconds
+              maximumAge: 0 // Don't use cached position
+            }
+          );
+        });
+      } catch (highAccuracyError) {
+        console.log("High accuracy failed, trying low accuracy...");
+        // Fallback to lower accuracy if high accuracy fails
+        position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            reject,
+            {
+              enableHighAccuracy: false,
+              timeout: 5000, // 5 seconds
+              maximumAge: 30000 // 30 seconds cache
+            }
+          );
+        });
+      }
   
       const { latitude, longitude } = position.coords;
   
-      // Verify we got valid coordinates
-      if (!latitude || !longitude) {
+      // Verify coordinates are valid numbers
+      if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
+          isNaN(latitude) || isNaN(longitude)) {
         throw new Error("Invalid coordinates received");
       }
   
-      // Reverse geocoding using OpenStreetMap
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-        {
-          headers: {
-            'Accept-Language': 'en', // Request English results
+      // Reverse geocoding with retry logic
+      let response;
+      try {
+        response = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+          {
+            headers: {
+              'Accept-Language': 'en',
+              'User-Agent': 'YourAppName/1.0 (your@email.com)' // Required by Nominatim
+            }
           }
-        }
-      );
-  
-      if (response.data.error) {
-        throw new Error("Could not convert coordinates to address");
+        );
+      } catch (geocodeError) {
+        // Fallback to another geocoding service if Nominatim fails
+        console.log("Nominatim failed, trying Mapbox...");
+        response = await axios.get(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=YOUR_MAPBOX_TOKEN`
+        );
       }
   
-      const { address } = response.data;
-      const formattedAddress = [
-        address.road,
-        address.neighbourhood,
-        address.suburb,
-        address.city,
-        address.town,
-        address.village,
-        address.state,
-        address.country
-      ]
-        .filter(Boolean)
-        .join(", ");
+      // Handle response based on service used
+      let formattedAddress;
+      if (response.data?.address) { // Nominatim response
+        const { address } = response.data;
+        formattedAddress = [
+          address.road,
+          address.neighbourhood,
+          address.suburb,
+          address.city,
+          address.town,
+          address.village,
+          address.state,
+          address.country
+        ]
+          .filter(Boolean)
+          .join(", ");
+      } else if (response.data?.features?.[0]?.place_name) { // Mapbox response
+        formattedAddress = response.data.features[0].place_name;
+      } else {
+        throw new Error("Could not convert coordinates to address");
+      }
   
       setFormData(prev => ({ ...prev, address: formattedAddress }));
       setLocationError("");
@@ -161,7 +211,7 @@ const [locationError, setLocationError] = useState("");
       setIsGettingLocation(false);
     }
   };
-  /** Handles image selection, preview, and uploads the image */
+  
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -191,17 +241,32 @@ const [locationError, setLocationError] = useState("");
         const { data: { text } } = await recognize(file, 'eng', {
           logger: (m) => setProgress(Math.round(m.progress * 100)),
         });
+        console.log(text);
         
         if (text) {
           const formattedData = await getFromGemini(text);
-          if (formattedData) {
-            setFormData((prev) => ({
-              ...prev,
-              title: formattedData.title || prev.title,
-              description: formattedData.content || prev.description,
-              category: formattedData.category || prev.category,
-              address: formattedData.address || prev.address
-            }));
+          if(formattedData){
+            try {
+              const response = await axios.post(`http://localhost:5000/api/petitions/classify`, {
+                title: formattedData.title,
+                description: formattedData.description,
+              });
+              
+              if(response.data){
+               setFormData((prev) => ({
+                ...prev,
+                title: formattedData?.title || prev.title,
+                description: formattedData?.description || prev.description,
+                category: response?.data?.category || prev.category,
+                submittedBy: formattedData?.submittedBy || prev.submittedBy,
+                address: formattedData?.address || prev.address,
+                contact: formattedData?.contact || prev.contact
+              }));
+              }
+            } catch (axiosError) {
+              console.error("API Error:", axiosError);
+              setError("Failed to communicate with the classification service. Please try again later.");
+            }
           }
         }
       }
@@ -221,6 +286,8 @@ const [locationError, setLocationError] = useState("");
 
     try {
       // const response = await axios.post(`http://localhost:5000/api/petitions/${user?._id}`, formData);
+      // console.log(formData);
+      
       const response = await petitions.create(formData);
       console.log(response);
       // await petitions.create(formData);
@@ -231,11 +298,6 @@ const [locationError, setLocationError] = useState("");
       setLoading(false);
     }
   };
-
-  useEffect(()=>{
-    if (!navigator.geolocation) {
-      setLocationError("Geolocation is not supported by your browser");
-  }}, [])
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -281,25 +343,30 @@ const [locationError, setLocationError] = useState("");
     <label className="block text-sm font-medium text-gray-700">
       Address
       <button
-        type="button"
-        onClick={getCurrentLocationAddress}
-        disabled={isGettingLocation}
-        className="ml-2 text-sm text-blue-600 hover:text-blue-800"
-      >
-        {isGettingLocation ? (
-          <span className="inline-flex items-center">
-            <svg className="animate-spin -ml-1 mr-1 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Detecting...
-          </span>
-        ) : (
-          "Use my current location"
-        )}
-      </button>
+  type="button"
+  onClick={getCurrentLocationAddress}
+  disabled={isGettingLocation}
+  className={`ml-2 text-sm ${
+    isGettingLocation ? 'text-gray-500' : 'text-blue-600 hover:text-blue-800'
+  }`}
+>
+  {isGettingLocation ? (
+    <span className="inline-flex items-center">
+      <svg className="animate-spin -ml-1 mr-1 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      Detecting...
+    </span>
+  ) : (
+    "Use my current location"
+  )}
+</button>
+      
     </label>
     
+    
+
     <input
       type="text"
       name="address"
@@ -325,6 +392,16 @@ const [locationError, setLocationError] = useState("");
         <label className="block text-sm w-full font-medium text-gray-700">Description</label>
         <textarea name="description" value={formData.description} onChange={handleInputChange} required rows={4} className="input-field w-full border  border-gray-300" />
       </div>
+      {/* submitted BY */}
+      <div>
+        <label className="block text-sm w-full font-medium text-gray-700">Submitted By</label>
+        <input type="text" name="submittedBy" value={formData.submittedBy} onChange={handleInputChange} required className="input-field w-full border  border-gray-300" />
+      </div>
+      {/* contact */}
+      <div>
+        <label className="block text-sm w-full font-medium text-gray-700">Contact</label>
+        <input type="text" name="contact" value={formData.contact} onChange={handleInputChange} required className="input-field w-full border  border-gray-300" />
+      </div>
 
       {/* Category */}
       <div>
@@ -334,11 +411,12 @@ const [locationError, setLocationError] = useState("");
 
       {/* Submit and Cancel Buttons */}
       <div className="flex justify-between">
-        <button type="submit" className="btn-primary" disabled={loading}>
-          {loading ? "Submitting..." : "Submit"}
-        </button>
-        <button type="button" className="btn-secondary" onClick={onCancel}>
+        
+        <button type="button" className="bg-red-500 text-white px-4 py-2 rounded" onClick={onCancel}>
           Cancel
+        </button>
+        <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded" disabled={loading}>
+          {loading ? "Submitting..." : "Submit"}
         </button>
       </div>
     </form>

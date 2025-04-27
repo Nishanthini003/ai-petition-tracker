@@ -8,8 +8,7 @@ import type { RootState, AppDispatch } from '../../store';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
   { name: 'My Petitions', href: '/petitions', icon: '📝' },
-  { name: 'Notifications', href: '/notifications', icon: '🔔' },
-  { name: 'Analytics', href: '/analytics', icon: '📈' },
+ 
 ];
 
 interface DashboardLayoutProps {
@@ -67,7 +66,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <div className="flex min-h-0 flex-1 flex-col border-r border-gray-200 bg-white">
           <div className="flex flex-1 flex-col overflow-y-auto pt-5 pb-4">
             <div className="flex flex-shrink-0 items-center px-4">
-              <h1 className="text-xl font-bold">Petition Tracker</h1>
+              <h1 className="text-xl font-bold">Petition Submission</h1>
             </div>
             <nav className="mt-5 flex-1 space-y-1 bg-white px-2">
               {navigation.map((item) => (
@@ -120,22 +119,13 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 leaveTo="transform opacity-0 scale-95"
               >
                 <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                  <Menu.Item>
-                    {({ active }) => (
-                      <a
-                        href="/profile"
-                        className={`${
-                          active ? 'bg-gray-100' : ''
-                        } block px-4 py-2 text-sm text-gray-700`}
-                      >
-                        Your Profile
-                      </a>
-                    )}
-                  </Menu.Item>
+                  
                   <Menu.Item>
                     {({ active }) => (
                       <button
                         onClick={handleLogout}
+
+                        
                         className={`${
                           active ? 'bg-gray-100' : ''
                         } block w-full text-left px-4 py-2 text-sm text-gray-700`}

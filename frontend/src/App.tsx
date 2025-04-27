@@ -3,15 +3,13 @@ import { useSelector } from 'react-redux';
 import { Login } from './pages/auth/Login';
 import { Signup } from './pages/auth/Signup';
 import { Dashboard } from './pages/dashboard/Dashboard';
-import { Profile } from './pages/profile/Profile';
-import { Notifications } from './pages/notifications/Notifications';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OfficerLogin } from './pages/officer/OfficerLogin';
 import OfficerRegister from './pages/officer/OfficerRegister';
 import OfficerDashboard from './pages/officer/OfficerDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import Demo from './pages/demo';
+import PetitionsPage from './pages/PetitionsPage';
 import type { RootState } from './store';
 
 // Configure future flags
@@ -66,18 +64,10 @@ const App = () => {
             }
           />
           <Route
-            path="/notifications"
+            path="/petitions"
             element={
               <DashboardLayout>
-                <Demo />
-              </DashboardLayout>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <DashboardLayout>
-                <Profile />
+                <PetitionsPage />
               </DashboardLayout>
             }
           />

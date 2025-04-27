@@ -2,9 +2,11 @@ import axios from "axios";
 
 interface GeminiResponse {
   title: string;
-  content: string;
-  address: string;
+  description: string;
   category: string;
+  submittedBy: string;
+  address: string;
+  contact: string;
 }
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
@@ -17,15 +19,16 @@ export const getFromGemini = async (text: string): Promise<GeminiResponse | null
       {
         contents: [{
           parts: [{
-            text: `Analyze the following text and return only a valid JSON response formatted as: 
+            text: `Analyze and enhance the following text for ai to classify and return only a valid JSON response formatted as: 
             { 
               "title": "", 
-              "content": "", 
-              "address": "", 
-              "category": ""
+              "description": "",
+              "submittedBy: "",
+              "address": "" 
+              "contact: ""
             }
-            Categories must be one of: ['Environment', 'Justice', 'Health', 'Education', 'Housing', 'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance', 'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 'Consumer Affairs']
-            Input text to analyze: ${text}`
+             
+            text to analyze is ${text}`
           }]
         }],
         generationConfig: {

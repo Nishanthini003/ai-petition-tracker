@@ -90,6 +90,8 @@ export const petitions = {
     address: string,
     category: string;
     priority?: string;
+    contact?: string;
+    submittedBy?: string;
   }) => {
     const formData = new FormData();
     
@@ -99,6 +101,8 @@ export const petitions = {
       }
     });
     try {
+      console.log(formData);
+      
       const response = await api.post('/petitions', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

@@ -3,10 +3,10 @@ import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import axios from 'axios';
 import type { RootState } from '../../store';
-import { FiLogOut, FiUsers, FiActivity, FiSettings, FiUser, FiHome, FiPlus, FiEdit2, FiTrash2, FiSearch } from 'react-icons/fi';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Modal, Button, Input, Select, message } from 'antd';
-
+import { FiLogOut, FiUser, FiHome, FiPlus, FiEdit2, FiTrash2, FiSearch, FiChevronRight, FiFolder } from 'react-icons/fi';
+import { Modal, Button, Input, Select, message, Card, Tag, Divider, Empty, Tooltip } from 'antd';
+import { exportToCsv } from '../../utils/exportToCsv';
+import { FiDownload } from 'react-icons/fi';
 const { Option } = Select;
 
 interface Officer {
@@ -21,16 +21,24 @@ interface Officer {
   photo?: string;
 }
 
+interface Petition {
+  _id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'reviewed' | 'resolved';
+  createdAt: string;
+  createdBy: {
+    name: string;
+    email: string;
+  };
+}
+
 const AdminDashboard = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
   const [officers, setOfficers] = useState<Officer[]>([]);
   const [filteredOfficers, setFilteredOfficers] = useState<Officer[]>([]);
-  const [stats, setStats] = useState({
-    totalOfficers: 0,
-    activeOfficers: 0,
-    departments: 0
-  });
+  const [petitions, setPetitions] = useState<Petition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,12 +53,13 @@ const AdminDashboard = () => {
     position: '',
     contactNumber: ''
   });
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
 
   const departments = [
     'Environment', 'Justice', 'Health', 'Education', 'Housing',
     'Transportation', 'Labor', 'Energy', 'Agriculture', 'Finance',
-    'Public Safety', 'Social Welfare', 'Water Resources', 'Communications', 
-    'Consumer Affairs'
+    'Public Safety', 'Social Welfare', 'Water', 'Communications', 
+    'Consumer'
   ];
 
   const handleLogout = () => {
@@ -66,11 +75,6 @@ const AdminDashboard = () => {
       if (response.data.status === 'success' && Array.isArray(response.data.data.officers)) {
         setOfficers(response.data.data.officers);
         setFilteredOfficers(response.data.data.officers);
-        setStats({
-          totalOfficers: response.data.results,
-          activeOfficers: response.data.data.officers.filter(o => o.isActive).length,
-          departments: [...new Set(response.data.data.officers.map(o => o.department))].length
-        });
       } else {
         throw new Error('Invalid response structure');
       }
@@ -85,18 +89,24 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchStats = async () => {
+  const fetchPetitionsByDepartment = async (department: string) => {
     try {
-      const response = await axios.get('http://localhost:5000/api/department/stats');
-      setStats(response.data);
+      setLoading(true);
+      const response = await axios.get(`http://localhost:5000/api/petitions/admin/`, {
+        params: { department } // Send as query parameter
+      });
+      
+      setPetitions(response.data.data);
+      setSelectedDepartment(department);
     } catch (err) {
-      console.error('Failed to fetch stats', err);
+      message.error(err.response?.data?.message || 'Failed to fetch petitions');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchOfficers();
-    // fetchStats();
   }, []);
 
   useEffect(() => {
@@ -144,6 +154,26 @@ const AdminDashboard = () => {
     setIsModalVisible(false);
   };
 
+// Add this to your AdminDashboard component
+const handleExportPetitions = () => {
+  if (petitions.length === 0) {
+    alert('No petitions to export');
+    return;
+  }
+
+  // Transform the data if needed (simplify nested objects)
+  const simplifiedPetitions = petitions.map(petition => ({
+    ID: petition._id,
+    Title: petition.title,
+    Description: petition.description,
+    Status: petition.status,
+    'Created At': new Date(petition.createdAt).toLocaleString(),
+    Department: selectedDepartment || 'All Departments'
+  }));
+
+  exportToCsv(`petitions_${selectedDepartment || 'all'}`, simplifiedPetitions);
+};
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -181,10 +211,19 @@ const AdminDashboard = () => {
     }
   };
 
-  const departmentData = departments.map(dept => {
-    const count = officers.filter(o => o.department === dept).length;
-    return { name: dept, officers: count };
-  }).filter(item => item.officers > 0);
+  const backToDepartments = () => {
+    setSelectedDepartment(null);
+    setPetitions([]);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'orange';
+      case 'reviewed': return 'blue';
+      case 'resolved': return 'green';
+      default: return 'gray';
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -192,25 +231,14 @@ const AdminDashboard = () => {
       <div className="hidden md:flex md:flex-shrink-0">
         <div className="flex flex-col w-64 bg-indigo-700 text-white">
           <div className="flex items-center justify-center h-16 px-4 bg-indigo-800">
-            <h1 className="text-xl font-bold">Administrative</h1>
+            <h1 className="text-xl font-bold">Admin Portal</h1>
           </div>
           <nav className="flex-1 px-4 py-4 space-y-2">
             <a href="#" className="flex items-center px-4 py-2 text-white bg-indigo-800 rounded-lg">
               <FiHome className="mr-3" />
               Dashboard
             </a>
-            <a href="#" className="flex items-center px-4 py-2 text-indigo-200 hover:text-white hover:bg-indigo-600 rounded-lg">
-              <FiUsers className="mr-3" />
-              Officers
-            </a>
-            <a href="#" className="flex items-center px-4 py-2 text-indigo-200 hover:text-white hover:bg-indigo-600 rounded-lg">
-              <FiActivity className="mr-3" />
-              Reports
-            </a>
-            <a href="#" className="flex items-center px-4 py-2 text-indigo-200 hover:text-white hover:bg-indigo-600 rounded-lg">
-              <FiSettings className="mr-3" />
-              Settings
-            </a>
+            
           </nav>
           <div className="p-4 border-t border-indigo-600">
             <div className="flex items-center">
@@ -236,13 +264,37 @@ const AdminDashboard = () => {
         {/* Top Navigation */}
         <header className="bg-white shadow-sm">
           <div className="flex items-center justify-between px-6 py-4">
-            <h1 className="text-2xl font-semibold text-gray-800">Officer Management</h1>
+            <h1 className="text-2xl font-semibold text-gray-800">
+              {selectedDepartment ? (
+                <div className="flex items-center">
+                  <button 
+                    onClick={backToDepartments}
+                    className="text-indigo-600 hover:text-indigo-800 mr-2"
+                  >
+                    Departments
+                  </button>
+                  <FiChevronRight className="mx-2 text-gray-400" />
+                  <span>{selectedDepartment}</span>
+                </div>
+              ) : 'Department Management'}
+            </h1>
             <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-500 hover:text-gray-700">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
+              <div className="relative">
+                <Input
+                  placeholder="Search officers..."
+                  prefix={<FiSearch className="text-gray-400" />}
+                  className="w-64"
+                  value={searchTerm}
+                  onChange={handleSearch}
+                />
+              </div>
+              <Button
+                type="primary"
+                icon={<FiPlus />}
+                onClick={() => showModal()}
+              >
+                Add Officer
+              </Button>
               <div className="relative">
                 <FiUser className="w-6 h-6" />
               </div>
@@ -252,219 +304,170 @@ const AdminDashboard = () => {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-indigo-100 text-indigo-600 mr-4">
-                  <FiUsers className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Total Officers</p>
-                  <p className="text-2xl font-semibold text-gray-800">
-                    {loading ? '...' : stats.totalOfficers}
-                  </p>
-                </div>
+          {selectedDepartment ? (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-gray-800">
+                  Petitions in {selectedDepartment}
+                </h2>
+                <div className="flex space-x-2">
+                <Tooltip 
+                  title="Export all petitions to CSV file" 
+                  placement="top" 
+                  arrow={{ pointAtCenter: true }}
+                >                   
+                  <Button onClick={() => handleExportPetitions()}>
+                    <FiDownload className="mr-2" /> Export CSV
+                  </Button>
+                </Tooltip>
               </div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-green-100 text-green-600 mr-4">
-                  <FiActivity className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Active Officers</p>
-                  <p className="text-2xl font-semibold text-gray-800">
-                    {loading ? '...' : stats.activeOfficers}
-                  </p>
-                </div>
               </div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
-                  <FiSettings className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Departments</p>
-                  <p className="text-2xl font-semibold text-gray-800">
-                    {loading ? '...' : stats.departments}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Charts and Search */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Officers by Department</h3>
-              <div className="h-64">
-                {departmentData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={departmentData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="officers" fill="#4f46e5" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-gray-500">
-                    No department data available
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Officer Search</h3>
-              <div className="flex mb-4">
-                <div className="relative flex-grow">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <FiSearch className="text-gray-400" />
-                  </div>
-                  <Input
-                    placeholder="Search officers..."
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={handleSearch}
-                  />
+              {loading ? (
+                <div className="flex justify-center items-center h-64">
+                  <p>Loading petitions...</p>
                 </div>
-                <Button
-                  type="primary"
-                  icon={<FiPlus />}
-                  className="ml-4"
-                  onClick={() => showModal()}
-                >
-                  Add Officer
-                </Button>
-              </div>
-              <div className="space-y-4">
-                {filteredOfficers.slice(0, 3).map(officer => (
-                  <div key={officer._id} className="flex items-start p-3 hover:bg-gray-50 rounded-lg">
-                    <div className="p-2 rounded-full bg-indigo-100 text-indigo-600 mr-3">
-                      <FiUser className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">{officer.name}</p>
-                      <p className="text-xs text-gray-500">{officer.department} • {officer.position}</p>
-                    </div>
-                    <button 
-                      onClick={() => showModal(officer)}
-                      className="text-indigo-600 hover:text-indigo-800"
-                    >
-                      <FiEdit2 />
-                    </button>
-                  </div>
-                ))}
-                {filteredOfficers.length > 3 && (
-                  <div className="text-center text-sm text-indigo-600">
-                    {filteredOfficers.length - 3} more officers found
-                  </div>
-                )}
-                {filteredOfficers.length === 0 && (
-                  <div className="text-center text-gray-500 py-4">
-                    No officers found matching your search
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Officers Table */}
-          <div className="bg-white rounded-lg shadow overflow-hidden hover:shadow-md transition-shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-gray-800">All Department Officers</h3>
-              <div className="flex space-x-2">
-                <Button
-                  type="primary"
-                  icon={<FiPlus />}
-                  onClick={() => showModal()}
-                >
-                  Add Officer
-                </Button>
-              </div>
-            </div>
-            {loading ? (
-              <div className="p-6 text-center">
-                <p>Loading officers...</p>
-              </div>
-            ) : error ? (
-              <div className="p-6 text-center text-red-500">
-                {error}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Officer
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Contact
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Department
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredOfficers.map((officer) => (
-                      <tr key={officer._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="flex-shrink-0 h-10 w-10">
-                              <img className="h-10 w-10 rounded-full" src={officer.photo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTo0vRipjHMf43IZOUDNl-pnZl5gTiNnCSHcQ&s'} alt="" />
-                            </div>
-                            <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">{officer.name}</div>
-                              <div className="text-sm text-gray-500">#{officer.badgeNumber}</div>
-                            </div>
+              ) : petitions.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {petitions.map(petition => (
+                    <Card key={petition._id} className="hover:shadow-md transition-shadow">
+                      <div className="flex justify-between">
+                        <div>
+                          <h3 className="text-lg font-medium">{petition.title}</h3>
+                          <p className="text-gray-600 mt-1">{petition.description}</p>
+                          <div className="mt-2 flex items-center">
+                            <Tag color={getStatusColor(petition.status)}>
+                              {petition.status.toUpperCase()}
+                            </Tag>
+                            
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{officer.email}</div>
-                          <div className="text-sm text-gray-500">{officer.contactNumber}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{officer.department}</div>
-                          <div className="text-sm text-gray-500">{officer.position}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${officer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {officer.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={() => showModal(officer)}
-                            className="text-indigo-600 hover:text-indigo-900 mr-4"
-                          >
-                            <FiEdit2 className="inline mr-1" /> Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(officer._id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            <FiTrash2 className="inline mr-1" /> Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                        
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Empty
+                  description={
+                    <span className="text-gray-500">
+                      No petitions found for this department
+                    </span>
+                  }
+                  className="flex flex-col items-center justify-center h-64"
+                />
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <h2 className="text-xl font-semibold text-gray-800 mb-4">All Departments</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {departments.map(department => {
+                    const officerCount = officers.filter(o => o.department === department).length;
+                    return (
+                      <Card
+                        key={department}
+                        hoverable
+                        onClick={() => fetchPetitionsByDepartment(department)}
+                        className="hover:shadow-lg transition-shadow"
+                      >
+                        <div className="flex items-center">
+                          <div className="p-3 rounded-full bg-indigo-100 text-indigo-600 mr-4">
+                            <FiFolder className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-gray-800">{department}</h3>
+                            <p className="text-sm text-gray-500">
+                              {officerCount} {officerCount === 1 ? 'officer' : 'officers'}
+                            </p>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
-            )}
-          </div>
+
+              <Divider />
+
+              <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-800">Officers Management</h3>
+                </div>
+                {loading ? (
+                  <div className="p-6 text-center">
+                    <p>Loading officers...</p>
+                  </div>
+                ) : error ? (
+                  <div className="p-6 text-center text-red-500">
+                    {error}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Officer
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredOfficers.map((officer) => (
+                          <tr key={officer._id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-10 w-10">
+                                  <img className="h-10 w-10 rounded-full" src={officer.photo || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTo0vRipjHMf43IZOUDNl-pnZl5gTiNnCSHcQ&s'} alt="" />
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">{officer.name}</div>
+                                  <div className="text-sm text-gray-500">{officer.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{officer.department}</div>
+                              <div className="text-sm text-gray-500">{officer.position}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${officer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {officer.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <button
+                                onClick={() => showModal(officer)}
+                                className="text-indigo-600 hover:text-indigo-900 mr-4"
+                              >
+                                <FiEdit2 className="inline mr-1" /> Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(officer._id)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                <FiTrash2 className="inline mr-1" /> Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </main>
       </div>
 
